@@ -1,0 +1,127 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+import random
+import hashlib
+import hmac
+
+def xor(byteseq1, byteseq2):  
+
+  l1 = [b for b in byteseq1]    
+  l2 = [b for b in byteseq2]
+  l1xorl2 = [bytes([elem1^elem2]) for elem1,elem2 in zip(l1,l2)]   
+  result = b''.join(l1xorl2)    
+  return result
+  
+def F(byteseq, k):   
+  h = hmac.new( k,byteseq, hashlib.sha1)   
+  return h.digest()[:8]
+  
+def feistel_block(LE_inp, RE_inp, k):    
+  
+  LE_out = RE_inp   
+  fun =  F(RE_inp, k)    
+  RE_out = xor(LE_inp, fun)    
+  return LE_out, RE_out
+  
+def gen_keylist(keylenbytes, numkeys, seed):    
+
+  keylist = []    
+  random.seed(seed) 
+  
+  for i in range(numkeys):       
+    val = []        
+    for a in range(keylenbytes):            
+      k = bytes([random.randint(0,255)])            
+      val.append(k)        
+    val1 = b''.join(val)        
+    keylist.append(val1)    
+   return keylist
+ 
+def feistel_enc(inputblock, num_rounds, seed):  
+ 
+   cipherblock = ""    
+   keylist = gen_keylist(4, num_rounds, seed)    
+   L, R = inputblock[:int(len(inputblock)/2)], inputblock[int(len(inputblock)/2):]    
+   
+   for i in range(num_rounds):        
+     k = keylist[i]        
+     c1 , c2 = feistel_block(L, R, k)        
+     L = c1        
+     R = c2    
+   
+   cipherblock = c2 + c1    
+   return cipherblock
+   
+ def feistel_enc_test(input_fname, seed, num_rounds, output_fname):   
+ 
+   finp = open(input_fname, 'rb')    
+   inpbyteseq = finp.read()    
+   finp.close()    
+   
+   inp = [inpbyteseq[i:i+8] for i in range(0, len(inpbyteseq), 8)]    
+   LastBlock_len = len(inp[len(inp)-1])
+   
+   if(LastBlock_len < 8):        
+     for i in range(LastBlock_len, 8):            
+       inp[len(inp)-1] += b'\x20'       
+       
+   temp = []    
+   for i in range(len(inp)):        
+     cipherblock = feistel_enc(inp[i], num_rounds, seed)        
+     temp.append(cipherblock)   
+   
+   cipherbyteseq = b''.join(temp)   
+   
+   fout = open(output_fname, 'wb')    
+   fout.write(cipherbyteseq)    
+   fout.close()
+   
+def feistel_dec(inputblock, num_rounds, seed):    
+  plainblock = ""    
+  keylist1 = gen_keylist(4, num_rounds, seed)  
+  keylist = keylist1[::-1]    
+  L, R = inputblock[:int(len(inputblock)/2)], inputblock[int(len(inputblock)/2):]    
+  
+  for i in range(num_rounds):      
+    k = keylist[i]        
+    p1 , p2 = feistel_block(L, R, k)        
+    L = p1        
+    R = p2
+    
+  plainblock = p2 + p1    
+  return plainblock
+  
+def feistel_dec_test(input_fname, seed, num_rounds, output_fname):    
+
+  finp = open(input_fname, 'rb')    
+  inpbyteseq = finp.read()
+  finp.close()    
+  
+  inp = [inpbyteseq[i:i+8] for i in range(0, len(inpbyteseq), 8)]    
+  LastBlock_len = len(inp[len(inp)-1])    
+  
+  if(LastBlock_len < 8):        
+    for i in range(LastBlock_len, 8):            
+      inp[len(inp)-1] += b'\x20'   
+      
+  temp = []    
+  for i in range(len(inp)):        
+    plainblock = feistel_dec(inp[i], num_rounds, seed)       
+    temp.append(plainblock)    
+    
+  plainbyteseq = b''.join(temp)
+  
+  fout = open(output_fname, 'wb')    
+  fout.write(plainbyteseq)    
+  fout.close()
+  
+if __name__=="__main__":    
+  input_fname = "input.txt"     
+  seed = 0    
+  num_rounds = 16    
+  output_fname = "output.txt"    
+  final_fname = "final.txt"    
+  
+  feistel_enc_test(input_fname, seed, num_rounds, output_fname)    
+  feistel_dec_test(output_fname, seed, num_rounds, final_fname)
